@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # patched python-docx
 # https://github.com/python-openxml/python-docx/pull/673/files
 from docx import Document
