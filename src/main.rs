@@ -3,13 +3,14 @@ extern crate rocket;
 extern crate clap;
 
 use clap::{App, Arg};
+use std::path::Path;
 use std::process::Command;
 
 struct Docx(Vec<u8>);
 
 struct Config {
     base_url: String,
-    base_file: String,
+    base_file: Box<Path>,
     morpher_path: String,
 }
 
@@ -19,7 +20,7 @@ fn hello(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
     // TODO: check return value
     Docx(
         Command::new("./docm-morph.py")
-            .arg("doc-samples/Anexo.docm")
+            .arg(config.base_file.to_str().unwrap())
             .arg(format!("{}/{}/{}", &config.base_url, cid, uid))
             .output()
             .expect("Failed to execute command")
@@ -38,6 +39,13 @@ impl<'r> rocket::response::Responder<'r, 'static> for Docx {
     }
 }
 
+fn validate_file_exists(s: String) -> Result<(), String> {
+    match Path::new(&s).is_file() {
+        true => Ok(()),
+        _ => Err(format!("Cannot find file '{}'", s)),
+    }
+}
+
 #[launch]
 fn rocket() -> _ {
     let args = App::new("phish-serve")
@@ -47,11 +55,18 @@ fn rocket() -> _ {
                 .takes_value(true)
                 .required(true),
         )
+        .arg(
+            Arg::with_name("base_file")
+                .long("base-file")
+                .takes_value(true)
+                .required(true)
+                .validator(validate_file_exists),
+        )
         .get_matches();
 
     let config = Config {
         base_url: args.value_of("base_url").unwrap().to_string(),
-        base_file: String::from(""),
+        base_file: Box::from(Path::new(args.value_of("base_file").unwrap())),
         morpher_path: String::from(""),
     };
 
