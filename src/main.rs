@@ -16,10 +16,11 @@ struct Config {
 //TODO: make async
 #[get("/<_..>/<cid>/<uid>")]
 fn hello(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
+    // TODO: check return value
     Docx(
         Command::new("./docm-morph.py")
             .arg("doc-samples/Anexo.docm")
-            .arg(&config.base_url)
+            .arg(format!("{}/{}/{}", &config.base_url, cid, uid))
             .output()
             .expect("Failed to execute command")
             .stdout,
@@ -30,6 +31,7 @@ impl<'r> rocket::response::Responder<'r, 'static> for Docx {
     fn respond_to(self, _: &rocket::Request<'_>) -> rocket::response::Result<'static> {
         rocket::Response::build()
             //TODO: make name dynamic
+            //TODO: add content-type
             .raw_header("Content-Disposition", r#"attachment; filename="test.docm""#)
             .sized_body(self.0.len(), std::io::Cursor::new(self.0))
             .ok()
