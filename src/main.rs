@@ -14,9 +14,14 @@ struct Config {
     morpher_path: Box<Path>,
 }
 
-//TODO: make async
-#[get("/<_..>/<cid>/<uid>")]
-fn hello(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
+// This is needed because serve_ignored() requires an ignored segment
+#[get("/<cid>/<uid>", rank = 0)]
+fn serve(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
+    serve_ignored(cid, uid, config)
+}
+
+#[get("/<_..>/<cid>/<uid>", rank = 1)]
+fn serve_ignored(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
     let morpher: &Path = &config.morpher_path;
     let dot_morpher = &Path::new("./").join(morpher);
     let morpher = match !(morpher.is_absolute() || morpher.starts_with("./")) {
@@ -83,5 +88,7 @@ fn rocket() -> _ {
         morpher_path: Box::from(Path::new(args.value_of("file_morpher").unwrap())),
     };
 
-    rocket::build().manage(config).mount("/", routes![hello])
+    rocket::build()
+        .manage(config)
+        .mount("/", routes![serve_ignored, serve])
 }
