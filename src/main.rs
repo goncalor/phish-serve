@@ -3,6 +3,7 @@ extern crate rocket;
 extern crate clap;
 
 use clap::{App, Arg};
+use rocket::http::Status;
 use std::path::Path;
 use std::process::Command;
 
@@ -19,20 +20,31 @@ struct Config {
 
 // This is needed because serve_ignored() requires an ignored segment
 #[get("/<cid>/<uid>", rank = 0)]
-fn serve(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
+fn serve(cid: &str, uid: &str, config: &rocket::State<Config>) -> Result<Docx, Status> {
     serve_ignored(cid, uid, config)
 }
 
 #[get("/<_..>/<cid>/<uid>", rank = 1)]
-fn serve_ignored(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
+fn serve_ignored<'a>(cid: &str, uid: &str, config: &rocket::State<Config>) -> Result<Docx, Status> {
     let morpher: &Path = &config.morpher_path;
     let dot_morpher = &Path::new("./").join(morpher);
     let morpher = match !(morpher.is_absolute() || morpher.starts_with("./")) {
         true => dot_morpher,
         _ => morpher,
     };
-    // TODO: check return value
-    Docx {
+
+    let output = Command::new(morpher)
+        .arg(config.base_file.to_str().unwrap())
+        .arg(format!("{}/{}/{}", &config.base_url, cid, uid))
+        .output()
+        .expect("Failed to execute command");
+
+    if !output.status.success() {
+        return Err(Status::InternalServerError);
+    }
+
+    Ok(Docx {
+        // same name as base file name
         name: config
             .base_file
             .file_name()
@@ -40,13 +52,8 @@ fn serve_ignored(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
             .to_str()
             .unwrap()
             .to_string(),
-        content: Command::new(morpher)
-            .arg(config.base_file.to_str().unwrap())
-            .arg(format!("{}/{}/{}", &config.base_url, cid, uid))
-            .output()
-            .expect("Failed to execute command")
-            .stdout,
-    }
+        content: output.stdout,
+    })
 }
 
 impl<'r> rocket::response::Responder<'r, 'static> for Docx {
