@@ -11,15 +11,21 @@ struct Docx(Vec<u8>);
 struct Config {
     base_url: String,
     base_file: Box<Path>,
-    morpher_path: String,
+    morpher_path: Box<Path>,
 }
 
 //TODO: make async
 #[get("/<_..>/<cid>/<uid>")]
 fn hello(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
+    let morpher: &Path = &config.morpher_path;
+    let dot_morpher = &Path::new("./").join(morpher);
+    let morpher = match !(morpher.is_absolute() || morpher.starts_with("./")) {
+        true => dot_morpher,
+        _ => morpher,
+    };
     // TODO: check return value
     Docx(
-        Command::new("./docm-morph.py")
+        Command::new(morpher)
             .arg(config.base_file.to_str().unwrap())
             .arg(format!("{}/{}/{}", &config.base_url, cid, uid))
             .output()
@@ -62,12 +68,19 @@ fn rocket() -> _ {
                 .required(true)
                 .validator(validate_file_exists),
         )
+        .arg(
+            Arg::with_name("file_morpher")
+                .long("morpher")
+                .takes_value(true)
+                .required(true)
+                .validator(validate_file_exists),
+        )
         .get_matches();
 
     let config = Config {
         base_url: args.value_of("base_url").unwrap().to_string(),
         base_file: Box::from(Path::new(args.value_of("base_file").unwrap())),
-        morpher_path: String::from(""),
+        morpher_path: Box::from(Path::new(args.value_of("file_morpher").unwrap())),
     };
 
     rocket::build().manage(config).mount("/", routes![hello])
