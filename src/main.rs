@@ -6,7 +6,10 @@ use clap::{App, Arg};
 use std::path::Path;
 use std::process::Command;
 
-struct Docx(Vec<u8>);
+struct Docx {
+    name: String,
+    content: Vec<u8>,
+}
 
 struct Config {
     base_url: String,
@@ -29,23 +32,32 @@ fn serve_ignored(cid: &str, uid: &str, config: &rocket::State<Config>) -> Docx {
         _ => morpher,
     };
     // TODO: check return value
-    Docx(
-        Command::new(morpher)
+    Docx {
+        name: config
+            .base_file
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string(),
+        content: Command::new(morpher)
             .arg(config.base_file.to_str().unwrap())
             .arg(format!("{}/{}/{}", &config.base_url, cid, uid))
             .output()
             .expect("Failed to execute command")
             .stdout,
-    )
+    }
 }
 
 impl<'r> rocket::response::Responder<'r, 'static> for Docx {
     fn respond_to(self, _: &rocket::Request<'_>) -> rocket::response::Result<'static> {
         rocket::Response::build()
-            //TODO: make name dynamic
             //TODO: add content-type
-            .raw_header("Content-Disposition", r#"attachment; filename="test.docm""#)
-            .sized_body(self.0.len(), std::io::Cursor::new(self.0))
+            .raw_header(
+                "Content-Disposition",
+                format!(r#"attachment; filename="{}""#, self.name),
+            )
+            .sized_body(self.content.len(), std::io::Cursor::new(self.content))
             .ok()
     }
 }
