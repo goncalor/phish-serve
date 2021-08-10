@@ -59,7 +59,10 @@ fn serve_ignored<'a>(cid: &str, uid: &str, config: &rocket::State<Config>) -> Re
 impl<'r> rocket::response::Responder<'r, 'static> for Docx {
     fn respond_to(self, _: &rocket::Request<'_>) -> rocket::response::Result<'static> {
         rocket::Response::build()
-            //TODO: add content-type
+            .raw_header(
+                "content-type",
+                "application/vnd.ms-word.document.macroEnabled.12"
+            )
             .raw_header(
                 "Content-Disposition",
                 format!(r#"attachment; filename="{}""#, self.name),
